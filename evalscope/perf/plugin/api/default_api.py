@@ -71,6 +71,21 @@ class DefaultApiPlugin(ApiPluginBase):
     def __init__(self, param: Arguments):
         super().__init__(param)
 
+    @staticmethod
+    def _extract_cached_tokens(usage: Dict[str, Any]) -> int:
+        """Return server-reported cached prompt tokens, or 0 when absent."""
+        prompt_tokens_details = usage.get('prompt_tokens_details')
+        if not isinstance(prompt_tokens_details, dict):
+            return 0
+
+        cached_tokens = prompt_tokens_details.get('cached_tokens')
+        if cached_tokens is None:
+            return 0
+        try:
+            return int(cached_tokens)
+        except (TypeError, ValueError):
+            return 0
+
     async def process_request(
         self, client_session: aiohttp.ClientSession, url: str, headers: Dict, body: Dict
     ) -> BenchmarkData:
@@ -142,12 +157,7 @@ class DefaultApiPlugin(ApiPluginBase):
                                     elif usage := data.get('usage'):
                                         output.prompt_tokens = usage.get('prompt_tokens')
                                         output.completion_tokens = usage.get('completion_tokens')
-                                        # Extract real cached tokens from prompt_tokens_details
-                                        _details = usage.get('prompt_tokens_details')
-                                        if _details and isinstance(_details, dict):
-                                            _cached = _details.get('cached_tokens')
-                                            if _cached is not None:
-                                                output.real_cached_tokens = _cached
+                                        output.real_cached_tokens = self._extract_cached_tokens(usage)
 
                                     most_recent_timestamp = timestamp
 
@@ -189,12 +199,7 @@ class DefaultApiPlugin(ApiPluginBase):
                             if usage := payload.get('usage'):
                                 output.prompt_tokens = usage.get('prompt_tokens')
                                 output.completion_tokens = usage.get('completion_tokens')
-                                # Extract real cached tokens from prompt_tokens_details
-                                _details = usage.get('prompt_tokens_details')
-                                if _details and isinstance(_details, dict):
-                                    _cached = _details.get('cached_tokens')
-                                    if _cached is not None:
-                                        output.real_cached_tokens = _cached
+                                output.real_cached_tokens = self._extract_cached_tokens(usage)
 
                             output.response_messages.append(payload)
                         else:

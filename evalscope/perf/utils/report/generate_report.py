@@ -238,6 +238,8 @@ def _build_summary_items(
             ('Avg Input Tokens', f'{s.avg_input_tokens:.1f}'),
             ('Avg Output Tokens', f'{s.avg_output_tokens:.1f}'),
         ]
+        if s.avg_cached_percent is not None:
+            extra.append(('Avg Prefix Cache Hit Rate (%)', f'{s.avg_cached_percent:.2f}'))
 
     return [{'key': k, 'value': v} for k, v in base + extra]
 

@@ -29,6 +29,7 @@ class DatabaseColumns:
     FIRST_CHUNK_LATENCY = 'first_chunk_latency'
     PROMPT_TOKENS = 'prompt_tokens'
     COMPLETION_TOKENS = 'completion_tokens'
+    CACHED_TOKENS = 'cached_tokens'
     MAX_GPU_MEMORY_COST = 'max_gpu_memory_cost'
     TIME_PER_OUTPUT_TOKEN = 'time_per_output_token'
 
@@ -63,6 +64,7 @@ def create_result_table(cursor):
                       {DatabaseColumns.FIRST_CHUNK_LATENCY} REAL,
                       {DatabaseColumns.PROMPT_TOKENS} INTEGER,
                       {DatabaseColumns.COMPLETION_TOKENS} INTEGER,
+                      {DatabaseColumns.CACHED_TOKENS} INTEGER,
                       {DatabaseColumns.MAX_GPU_MEMORY_COST} REAL,
                       {DatabaseColumns.TIME_PER_OUTPUT_TOKEN} REAL
                    )'''
@@ -88,15 +90,17 @@ def insert_benchmark_data(cursor: sqlite3.Cursor, benchmark_data: BenchmarkData)
         # Add additional columns for success case
         additional_columns = (
             benchmark_data.query_latency, benchmark_data.first_chunk_latency, benchmark_data.prompt_tokens,
-            benchmark_data.completion_tokens, benchmark_data.max_gpu_memory_cost, benchmark_data.time_per_output_token
+            benchmark_data.completion_tokens, benchmark_data.cached_tokens, benchmark_data.max_gpu_memory_cost,
+            benchmark_data.time_per_output_token
         )
         query = f"""INSERT INTO result(
                       {DatabaseColumns.REQUEST}, {DatabaseColumns.START_TIME}, {DatabaseColumns.INTER_TOKEN_LATENCIES},
                       {DatabaseColumns.SUCCESS}, {DatabaseColumns.RESPONSE_MESSAGES}, {DatabaseColumns.COMPLETED_TIME},
                       {DatabaseColumns.LATENCY}, {DatabaseColumns.FIRST_CHUNK_LATENCY}, {DatabaseColumns.PROMPT_TOKENS},
-                      {DatabaseColumns.COMPLETION_TOKENS}, {DatabaseColumns.MAX_GPU_MEMORY_COST},
+                      {DatabaseColumns.COMPLETION_TOKENS}, {DatabaseColumns.CACHED_TOKENS},
+                      {DatabaseColumns.MAX_GPU_MEMORY_COST},
                       {DatabaseColumns.TIME_PER_OUTPUT_TOKEN}
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         cursor.execute(query, common_columns + additional_columns)
     else:
         query = f"""INSERT INTO result(
@@ -163,7 +167,8 @@ def get_percentile_results(result_db_path: str, api_type: str = None) -> Percent
     query_sql = f'''SELECT {DatabaseColumns.START_TIME}, {DatabaseColumns.INTER_TOKEN_LATENCIES}, {DatabaseColumns.SUCCESS},
                     {DatabaseColumns.COMPLETED_TIME}, {DatabaseColumns.LATENCY}, {DatabaseColumns.FIRST_CHUNK_LATENCY},
                     {DatabaseColumns.PROMPT_TOKENS},
-                    {DatabaseColumns.COMPLETION_TOKENS}, {DatabaseColumns.TIME_PER_OUTPUT_TOKEN}
+                    {DatabaseColumns.COMPLETION_TOKENS}, {DatabaseColumns.CACHED_TOKENS},
+                    {DatabaseColumns.TIME_PER_OUTPUT_TOKEN}
                     FROM result WHERE {DatabaseColumns.SUCCESS}=1'''  # noqa: E501
 
     percentiles = [1, 5, 10, 25, 50, 75, 90, 95, 99]
@@ -184,6 +189,13 @@ def get_percentile_results(result_db_path: str, api_type: str = None) -> Percent
         metrics = {
             PercentileMetrics.LATENCY: [row[col_indices[DatabaseColumns.LATENCY]] for row in rows],
             PercentileMetrics.INPUT_TOKENS: [row[col_indices[DatabaseColumns.PROMPT_TOKENS]] for row in rows],
+            PercentileMetrics.PREFIX_CACHE_HIT_RATE: [
+                row[col_indices[DatabaseColumns.CACHED_TOKENS]] * 100 / row[col_indices[DatabaseColumns.PROMPT_TOKENS]]
+                for row in rows
+                if row[col_indices[DatabaseColumns.CACHED_TOKENS]] is not None
+                and row[col_indices[DatabaseColumns.PROMPT_TOKENS]] is not None
+                and row[col_indices[DatabaseColumns.PROMPT_TOKENS]] > 0
+            ],
             PercentileMetrics.INPUT_THROUGHPUT: [
                 (row[col_indices[DatabaseColumns.PROMPT_TOKENS]] / row[col_indices[DatabaseColumns.LATENCY]])
                 if row[col_indices[DatabaseColumns.LATENCY]] > 0 else float('nan') for row in rows
@@ -207,6 +219,13 @@ def get_percentile_results(result_db_path: str, api_type: str = None) -> Percent
             PercentileMetrics.LATENCY: [row[col_indices[DatabaseColumns.LATENCY]] for row in rows],
             PercentileMetrics.INPUT_TOKENS: [row[col_indices[DatabaseColumns.PROMPT_TOKENS]] for row in rows],
             PercentileMetrics.OUTPUT_TOKENS: [row[col_indices[DatabaseColumns.COMPLETION_TOKENS]] for row in rows],
+            PercentileMetrics.PREFIX_CACHE_HIT_RATE: [
+                row[col_indices[DatabaseColumns.CACHED_TOKENS]] * 100 / row[col_indices[DatabaseColumns.PROMPT_TOKENS]]
+                for row in rows
+                if row[col_indices[DatabaseColumns.CACHED_TOKENS]] is not None
+                and row[col_indices[DatabaseColumns.PROMPT_TOKENS]] is not None
+                and row[col_indices[DatabaseColumns.PROMPT_TOKENS]] > 0
+            ],
             PercentileMetrics.OUTPUT_THROUGHPUT: [
                 (row[col_indices[DatabaseColumns.COMPLETION_TOKENS]] / row[col_indices[DatabaseColumns.LATENCY]])
                 if row[col_indices[DatabaseColumns.LATENCY]] > 0 else float('nan') for row in rows
@@ -224,6 +243,8 @@ def get_percentile_results(result_db_path: str, api_type: str = None) -> Percent
     # Calculate percentiles for each metric and build transposed dict
     transposed: Dict[str, list] = {PercentileMetrics.PERCENTILES: [f'{p}%' for p in percentiles]}
     for metric_name, data in metrics.items():
+        if not data:
+            continue
         metric_percentiles = calculate_percentiles(data, percentiles)
         transposed[metric_name] = [metric_percentiles[p] for p in percentiles]
 

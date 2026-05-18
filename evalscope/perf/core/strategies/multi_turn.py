@@ -140,8 +140,7 @@ class MultiTurnStrategy(BenchmarkStrategy):
                 #
                 # Turn 1 always yields cached_tokens = 0 because there is no prior
                 # context.  The 0 is stored explicitly so the aggregator can include
-                # this turn's prompt_tokens in the denominator, producing an unbiased
-                # global ratio: total_cached_tokens / total_prompt_tokens.
+                # this turn as an active cache-tracking sample.
                 if benchmark_data.prompt_tokens is not None and benchmark_data.prompt_tokens > 0:
                     if benchmark_data.real_cached_tokens is not None:
                         benchmark_data.cached_tokens = benchmark_data.real_cached_tokens

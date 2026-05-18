@@ -16,7 +16,7 @@ Public classes
 from __future__ import annotations
 
 import json
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tabulate import tabulate
 from typing import Any, Dict, List, Optional
 
@@ -71,6 +71,16 @@ class BenchmarkSummary(BaseModel):
     # -----------------------------------------------------------------------
     # Derived properties
     # -----------------------------------------------------------------------
+
+    @model_validator(mode='before')
+    @classmethod
+    def _accept_legacy_cache_alias(cls, data: Any) -> Any:
+        """Accept benchmark summaries written before the prefix-cache rename."""
+        legacy_alias = 'KV Cache Hit Rate (%)'
+        if isinstance(data, dict) and legacy_alias in data and Metrics.AVERAGE_CACHED_PERCENT not in data:
+            data = dict(data)
+            data[Metrics.AVERAGE_CACHED_PERCENT] = data[legacy_alias]
+        return data
 
     @property
     def success_rate(self) -> float:
@@ -138,12 +148,14 @@ class BenchmarkSummary(BaseModel):
             rows.append((Metrics.INPUT_TOKEN_THROUGHPUT, _fmt(self.input_token_throughput)))
 
         # ── Multi-turn (optional) ──
-        if self.avg_turns is not None or self.avg_cached_percent is not None:
+        if self.avg_turns is not None:
             rows.append(('── Multi-turn ──', ''))
-            if self.avg_turns is not None:
-                rows.append((Metrics.AVERAGE_INPUT_TURNS_PER_REQUEST, _fmt(self.avg_turns)))
-            if self.avg_cached_percent is not None:
-                rows.append((Metrics.AVERAGE_CACHED_PERCENT, _fmt(self.avg_cached_percent)))
+            rows.append((Metrics.AVERAGE_INPUT_TURNS_PER_REQUEST, _fmt(self.avg_turns)))
+
+        # ── Prefix Cache (optional) ──
+        if self.avg_cached_percent is not None:
+            rows.append(('── Prefix Cache ──', ''))
+            rows.append((Metrics.AVERAGE_CACHED_PERCENT, _fmt(self.avg_cached_percent)))
 
         # ── Speculative Decoding (optional) ──
         if self.avg_decoded_tokens_per_iter is not None or self.approx_spec_acceptance_rate is not None:
@@ -175,6 +187,7 @@ class PercentileRow(BaseModel):
     tpot: Optional[float] = Field(None, alias=PercentileMetrics.TPOT)
     input_tokens: Optional[float] = Field(None, alias=PercentileMetrics.INPUT_TOKENS)
     output_tokens: Optional[float] = Field(None, alias=PercentileMetrics.OUTPUT_TOKENS)
+    prefix_cache_hit_rate: Optional[float] = Field(None, alias=PercentileMetrics.PREFIX_CACHE_HIT_RATE)
     output_throughput: Optional[float] = Field(None, alias=PercentileMetrics.OUTPUT_THROUGHPUT)
     input_throughput: Optional[float] = Field(None, alias=PercentileMetrics.INPUT_THROUGHPUT)
     total_throughput: Optional[float] = Field(None, alias=PercentileMetrics.TOTAL_THROUGHPUT)

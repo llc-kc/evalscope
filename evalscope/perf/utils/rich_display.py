@@ -159,7 +159,7 @@ class ReqMetCol:
 
     # Conditionally shown
     AVG_TURNS = ColSpec('avg_turns', 'Avg\nTurns/Req')
-    AVG_CACHE = ColSpec('avg_cache', 'Approx\nCache Hit', style='green')
+    AVG_CACHE = ColSpec('avg_cache', 'Prefix\nCache Hit', style='green')
     DECODE_TPS = ColSpec('decode_tps', 'Decode\ntoks/s', style='cyan')
     AVG_DECODED = ColSpec('avg_decoded', 'Decoded\nTok/Iter')
     SPEC_RATE = ColSpec('spec_rate', 'Spec.\nAccept Rate', style='cyan')

@@ -45,9 +45,9 @@ class Metrics:
     # Embedding / Rerank-specific
     INPUT_TOKEN_THROUGHPUT = 'Input Throughput (tok/s)'
 
-    # Multi-turn specific
+    # Multi-turn / prefix-cache specific
     AVERAGE_INPUT_TURNS_PER_REQUEST = 'Avg Turns/Request'
-    AVERAGE_CACHED_PERCENT = 'KV Cache Hit Rate (%)'
+    AVERAGE_CACHED_PERCENT = 'Avg Prefix Cache Hit Rate (%)'
 
     # Speculative decoding specific
     AVERAGE_DECODED_TOKENS_PER_ITER = 'Decoded Tok/Iter'
@@ -84,4 +84,5 @@ class PercentileMetrics:
     INPUT_THROUGHPUT = 'Input (tok/s)'
     TOTAL_THROUGHPUT = 'Total (tok/s)'
     DECODE_THROUGHPUT = 'Decode (tok/s)'
+    PREFIX_CACHE_HIT_RATE = 'Prefix Cache Hit Rate (%)'
     PERCENTILES = 'Percentiles'
